@@ -31,10 +31,10 @@ def alert(chk):
 
     fails = []
     for result in results[url][-60:]:
-        if result['status'] != chk['status'] or result['elapsed'] > chk.get('timeout', 10.0):
+        if result['status'] != chk['status'] or result['elapsed'] > chk['timeout']:
             fails.append(result)
 
-    if len(fails) < chk.get('fails', 1):
+    if len(fails) < chk['fails']:
         log.info('Supressing alert for fails %s ...', url)
         return
 
@@ -83,7 +83,7 @@ def check(chk):
     req = urllib.request.Request(url, headers={'User-Agent': 'https://github.com/mattbillenstein/pingthing v1.0'})
 
     try:
-        res = urllib.request.urlopen(req, timeout=chk.get('timeout', 5.0))
+        res = urllib.request.urlopen(req, timeout=chk['timeout'])
         status = res.code
     except urllib.error.URLError as e:
         log.exception(e)
@@ -99,7 +99,7 @@ def check(chk):
     if len(results[url]) >= 200:
         results[url][:] = results[url][-100:]
 
-    if status != chk['status'] or elapsed > chk.get('timeout', 10.0):
+    if status != chk['status'] or elapsed > chk['timeout']:
         log.error('Failure %s status:%s', url, status)
         alert(chk)
     else:
@@ -111,6 +111,12 @@ def main():
 
         reload(checks)
         for chk in checks.sites:
+            # defaults
+            chk = dict(chk)
+            for k, v in checks.DEFAULTS:
+                if k not in chk:
+                    chk[k] = v
+
             try:
                 check(chk)
             except KeyboardInterrupt:
