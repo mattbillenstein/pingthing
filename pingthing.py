@@ -52,8 +52,8 @@ def alert(chk):
     txt = f'Most recent:\n\n'
 
     for result in reversed(fails[-3:]):
-        ts = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(result['ts']))
-        txt += f'{ts} Status: {result["status"]} Elapsed: {result["elapsed"]:.1f}s\n'
+        ts = time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime(result['ts']))
+        txt += f'{ts} Status: {result["status"]} {result["elapsed"]:.1f}s\n'
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f'{url} has failed {len(fails)} time{"s" if len(fails) > 1 else ""} in the last hour'
@@ -85,8 +85,13 @@ def check(chk):
     try:
         res = urllib.request.urlopen(req, timeout=chk.get('timeout', 5.0))
         status = res.code
-    except urllib.error.URLError:
-        status = 408  # request timeout
+    except urllib.error.URLError as e:
+        log.exception(e)
+        status = 400
+        if isinstance(e.reason, TimeoutError):
+            status = 408
+        elif isinstance(e.reason, ConnectionResetError):
+            status = 444
 
     elapsed = time.time() - start
 
