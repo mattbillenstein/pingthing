@@ -1,0 +1,15 @@
+[Unit]
+Description=pingthing
+Documentation=
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+Environment=
+WorkingDirectory=/opt/pingthing
+ExecStartPre=
+ExecStart=/usr/bin/python3 pingthing.py
+
+[Install]
+WantedBy=multi-user.target
