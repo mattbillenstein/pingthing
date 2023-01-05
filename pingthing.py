@@ -5,6 +5,7 @@ import smtplib
 import ssl
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from email.mime.multipart import MIMEMultipart
@@ -28,7 +29,11 @@ def alert(chk):
     url = chk['url']
     now = time.time()
 
-    fails = [_ for _ in results[url][-60:]]
+    fails = []
+    for result in results[url][-60:]:
+        if result['status'] != chk['status'] or result['elapsed'] > chk.get('timeout', 10.0):
+            fails.append(result)
+
     if len(fails) < chk.get('fails', 1):
         log.info('Supressing alert for fails %s ...', url)
         return
@@ -48,7 +53,7 @@ def alert(chk):
 
     for result in reversed(fails[-3:]):
         ts = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(result['ts']))
-        txt += f'{ts} Code: {result["status"]} Elapsed: {result["elapsed"]:.1f}s\n'
+        txt += f'{ts} Status: {result["status"]} Elapsed: {result["elapsed"]:.1f}s\n'
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f'{url} has failed {len(fails)} time{"s" if len(fails) > 1 else ""} in the last hour'
@@ -61,13 +66,13 @@ def alert(chk):
         msg.attach(MIMEText(txt, "plain"))
     if html:
         msg.attach(MIMEText(html, "html"))
-    
+
     # Create secure connection with server and send email
     context = ssl.create_default_context()
     with smtplib.SMTP(config.smtp['host'], config.smtp['port']) as server:
         server.starttls(context=context)
         server.login(config.smtp['username'], config.smtp['password'])
-  
+
         # raises SMTPException in some cases...
         server.sendmail(from_email, chk['emails'], msg.as_string())
 
@@ -76,18 +81,24 @@ def check(chk):
     start = time.time()
     url = chk['url']
     req = urllib.request.Request(url, headers={'User-Agent': 'https://github.com/mattbillenstein/pingthing v1.0'})
-    res = urllib.request.urlopen(req, timeout=chk.get('timeout', 5.0))
+
+    try:
+        res = urllib.request.urlopen(req, timeout=chk.get('timeout', 5.0))
+        status = res.code
+    except urllib.error.URLError:
+        status = 408  # request timeout
+
     elapsed = time.time() - start
 
-    results[url].append({'ts': start, 'elapsed': elapsed, 'status': res.code})
+    results[url].append({'ts': start, 'elapsed': elapsed, 'status': status})
     if len(results[url]) >= 200:
         results[url][:] = results[url][-100:]
 
-    if res.code != chk['status']:
-        log.error('Failure %s code:%s', url, res.code)
+    if status != chk['status'] or elapsed > chk.get('timeout', 10.0):
+        log.error('Failure %s status:%s', url, status)
         alert(chk)
     else:
-        log.info('Success %s code:%s elapsed:%.1f', chk['url'], res.code, elapsed)
+        log.info('Success %s status:%s elapsed:%.1f', chk['url'], status, elapsed)
 
 def main():
     while 1:
@@ -101,7 +112,7 @@ def main():
                 break
             except Exception as e:
                 log.exception(e)
-            
+
         elapsed = time.time() - start
         if elapsed > 60.0:
             log.warning('Checks took more than 60s...')
