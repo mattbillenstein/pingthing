@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 results = defaultdict(list)
 alerted = {}
 
-def alert(chk):
+def alert(chk, data):
     url = chk['url']
     now = time.time()
 
@@ -49,7 +49,7 @@ def alert(chk):
     alerted[url] = (cnt+1, now)
 
     html = ''
-    txt = f'Most recent:\n\n'
+    txt = f'Response: {data}\n\nMost recent:\n\n'
 
     for result in reversed(fails[-3:]):
         ts = time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime(result['ts']))
@@ -84,7 +84,11 @@ def check(chk):
 
     try:
         res = urllib.request.urlopen(req, timeout=chk['timeout'])
-        status = res.code
+        status = res.status
+        data = res.read()
+    except urllib.error.HTTPError as e:
+        status = e.status
+        data = e.read()
     except urllib.error.URLError as e:
         log.exception(e)
         status = 400
@@ -100,8 +104,8 @@ def check(chk):
         results[url][:] = results[url][-100:]
 
     if status != chk['status'] or elapsed > chk['timeout']:
-        log.error('Failure %s status:%s', url, status)
-        alert(chk)
+        log.error('Failure %s status:%s data:%s', url, status, data)
+        alert(chk, data)
     else:
         log.info('Success %s status:%s elapsed:%.1f', chk['url'], status, elapsed)
 
