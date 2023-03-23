@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 results = defaultdict(list)
 alerted = {}
 
-def alert(chk, data):
+def alert(chk):
     url = chk['url']
     now = time.time()
 
@@ -49,11 +49,14 @@ def alert(chk, data):
     alerted[url] = (cnt+1, now)
 
     html = ''
-    txt = f'Response: {data}\n\nMost recent:\n\n'
+    txt = f'Recent:\n\n'
 
     for result in reversed(fails[-3:]):
         ts = time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime(result['ts']))
         txt += f'{ts} Status: {result["status"]} {result["elapsed"]:.1f}s\n'
+
+    result = results[url][-1]
+    txt += f'\nResponse:\n{result["data"]}'
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f'{url} has failed {len(fails)} time{"s" if len(fails) > 1 else ""} in the last hour'
@@ -99,13 +102,13 @@ def check(chk):
 
     elapsed = time.time() - start
 
-    results[url].append({'ts': start, 'elapsed': elapsed, 'status': status})
+    results[url].append({'ts': start, 'elapsed': elapsed, 'status': status, 'data': data})
     if len(results[url]) >= 200:
         results[url][:] = results[url][-100:]
 
     if status != chk['status'] or elapsed > chk['timeout']:
         log.error('Failure %s status:%s data:%s', url, status, data)
-        alert(chk, data)
+        alert(chk)
     else:
         log.info('Success %s status:%s elapsed:%.1f', chk['url'], status, elapsed)
 
