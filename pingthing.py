@@ -94,6 +94,7 @@ def check(chk):
         data = e.read()
     except urllib.error.URLError as e:
         log.exception(e)
+        data = None
         status = 400
         if isinstance(e.reason, TimeoutError):
             status = 408
