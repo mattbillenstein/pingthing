@@ -88,10 +88,10 @@ def check(chk):
     try:
         res = urllib.request.urlopen(req, timeout=chk['timeout'])
         status = res.status
-        data = res.read()
+        data = res.read().decode(res.headers.get_content_charset('utf-8'))
     except urllib.error.HTTPError as e:
         status = e.status
-        data = e.read()
+        data = e.read().decode(e.headers.get_content_charset('utf-8'))
     except urllib.error.URLError as e:
         log.exception(e)
         data = None
